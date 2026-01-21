@@ -1,6 +1,6 @@
 {
   "name": "@grapenpm/grape-verification-registry",
-  "version": "0.1.1-alpha.2",
+  "version": "0.1.1-alpha.3",
   "description": "Client helpers for the Grape Verification Registry Solana program",
   "license": "MIT",
   "type": "module",
@@ -14,9 +14,7 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts",
     "dev": "tsup src/index.ts --watch",
