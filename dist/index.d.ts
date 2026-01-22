@@ -1,5 +1,5 @@
 import * as _solana_web3_js from '@solana/web3.js';
-import { PublicKey, Connection } from '@solana/web3.js';
+import { PublicKey, Connection, TransactionInstruction } from '@solana/web3.js';
 import * as buffer from 'buffer';
 
 declare const PROGRAM_ID: PublicKey;
@@ -44,4 +44,70 @@ declare function fetchSpace(connection: Connection, space: PublicKey): Promise<_
 declare function fetchIdentity(connection: Connection, identity: PublicKey): Promise<_solana_web3_js.AccountInfo<buffer.Buffer> | null>;
 declare function fetchLinksForIdentity(connection: Connection, identity: PublicKey): Promise<_solana_web3_js.GetProgramAccountsResponse>;
 
-export { PROGRAM_ID, TAG_DISCORD, TAG_EMAIL, TAG_TELEGRAM, TAG_TWITTER, TAG_WALLET, VerificationPlatform, deriveIdentityPda, deriveLinkPda, deriveSpacePda, fetchIdentity, fetchLinksForIdentity, fetchSpace, identityHash, walletHash };
+declare function buildInitializeSpaceIx(args: {
+    daoId: PublicKey;
+    salt: Uint8Array | number[];
+    authority: PublicKey;
+    payer: PublicKey;
+    programId?: PublicKey;
+}): {
+    spaceAcct: PublicKey;
+    ix: TransactionInstruction;
+};
+declare function buildAttestIdentityIx(args: {
+    daoId: PublicKey;
+    platform: VerificationPlatform;
+    platformSeed: number;
+    idHash: Uint8Array | number[];
+    expiresAt: bigint;
+    attestor: PublicKey;
+    payer: PublicKey;
+    programId?: PublicKey;
+}): {
+    spaceAcct: PublicKey;
+    identity: PublicKey;
+    ix: TransactionInstruction;
+};
+declare function buildRevokeIdentityIx(args: {
+    daoId: PublicKey;
+    platform: VerificationPlatform;
+    platformSeed: number;
+    idHash: Uint8Array | number[];
+    attestor: PublicKey;
+    programId?: PublicKey;
+}): {
+    spaceAcct: PublicKey;
+    identity: PublicKey;
+    ix: TransactionInstruction;
+};
+declare function buildLinkWalletIx(args: {
+    daoId: PublicKey;
+    platformSeed: number;
+    idHash: Uint8Array | number[];
+    wallet: PublicKey;
+    walletHash: Uint8Array | number[];
+    attestor: PublicKey;
+    payer: PublicKey;
+    programId?: PublicKey;
+}): {
+    spaceAcct: PublicKey;
+    identity: PublicKey;
+    link: PublicKey;
+    ix: TransactionInstruction;
+};
+declare function buildUnlinkWalletIx(args: {
+    daoId: PublicKey;
+    platformSeed: number;
+    idHash: Uint8Array | number[];
+    walletHash: Uint8Array | number[];
+    attestor: PublicKey;
+    recipient: PublicKey;
+    programId?: PublicKey;
+}): {
+    spaceAcct: PublicKey;
+    identity: PublicKey;
+    link: PublicKey;
+    ix: TransactionInstruction;
+};
+
+export { PROGRAM_ID, TAG_DISCORD, TAG_EMAIL, TAG_TELEGRAM, TAG_TWITTER, TAG_WALLET, VerificationPlatform, buildAttestIdentityIx, buildInitializeSpaceIx, buildLinkWalletIx, buildRevokeIdentityIx, buildUnlinkWalletIx, deriveIdentityPda, deriveLinkPda, deriveSpacePda, fetchIdentity, fetchLinksForIdentity, fetchSpace, identityHash, walletHash };

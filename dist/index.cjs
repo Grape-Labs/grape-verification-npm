@@ -27,6 +27,11 @@ __export(index_exports, {
   TAG_TWITTER: () => TAG_TWITTER,
   TAG_WALLET: () => TAG_WALLET,
   VerificationPlatform: () => VerificationPlatform,
+  buildAttestIdentityIx: () => buildAttestIdentityIx,
+  buildInitializeSpaceIx: () => buildInitializeSpaceIx,
+  buildLinkWalletIx: () => buildLinkWalletIx,
+  buildRevokeIdentityIx: () => buildRevokeIdentityIx,
+  buildUnlinkWalletIx: () => buildUnlinkWalletIx,
   deriveIdentityPda: () => deriveIdentityPda,
   deriveLinkPda: () => deriveLinkPda,
   deriveSpacePda: () => deriveSpacePda,
@@ -43,12 +48,12 @@ var import_web3 = require("@solana/web3.js");
 var PROGRAM_ID = new import_web3.PublicKey(
   "Ev4pb62pHYcFHLmV89JRcgQtS39ndBia51X9ne9NmBkH"
 );
-var VerificationPlatform = /* @__PURE__ */ ((VerificationPlatform2) => {
-  VerificationPlatform2[VerificationPlatform2["Discord"] = 0] = "Discord";
-  VerificationPlatform2[VerificationPlatform2["Telegram"] = 1] = "Telegram";
-  VerificationPlatform2[VerificationPlatform2["Twitter"] = 2] = "Twitter";
-  VerificationPlatform2[VerificationPlatform2["Email"] = 3] = "Email";
-  return VerificationPlatform2;
+var VerificationPlatform = /* @__PURE__ */ ((VerificationPlatform3) => {
+  VerificationPlatform3[VerificationPlatform3["Discord"] = 0] = "Discord";
+  VerificationPlatform3[VerificationPlatform3["Telegram"] = 1] = "Telegram";
+  VerificationPlatform3[VerificationPlatform3["Twitter"] = 2] = "Twitter";
+  VerificationPlatform3[VerificationPlatform3["Email"] = 3] = "Email";
+  return VerificationPlatform3;
 })(VerificationPlatform || {});
 var TAG_WALLET = "wallet";
 var TAG_DISCORD = "discord";
@@ -135,6 +140,202 @@ async function fetchLinksForIdentity(connection, identity) {
     ]
   });
 }
+
+// src/ix.ts
+var import_web35 = require("@solana/web3.js");
+var import_buffer2 = require("buffer");
+var import_sha256 = require("@noble/hashes/sha256");
+var import_utils = require("@noble/hashes/utils");
+function u8(n) {
+  return n & 255;
+}
+function i64le(n) {
+  let x = BigInt.asIntN(64, n);
+  const out = new Uint8Array(8);
+  for (let i = 0; i < 8; i++) {
+    out[i] = Number(x & 0xffn);
+    x >>= 8n;
+  }
+  return out;
+}
+function concatBytes2(...arrays) {
+  const len = arrays.reduce((n, a) => n + a.length, 0);
+  const out = new Uint8Array(len);
+  let off = 0;
+  for (const a of arrays) {
+    out.set(a, off);
+    off += a.length;
+  }
+  return out;
+}
+function ixDisc(nameSnake) {
+  return (0, import_sha256.sha256)((0, import_utils.utf8ToBytes)(`global:${nameSnake}`)).slice(0, 8);
+}
+function serPubkey(pk) {
+  return pk.toBytes();
+}
+function serU8(n) {
+  return new Uint8Array([u8(n)]);
+}
+function serArray32(a) {
+  const b = a instanceof Uint8Array ? a : Uint8Array.from(a);
+  if (b.length !== 32) throw new Error("Expected 32-byte array");
+  return b;
+}
+function serPlatform(platform) {
+  return serU8(platform);
+}
+function buildInitializeSpaceIx(args) {
+  const programId = args.programId ?? PROGRAM_ID;
+  const disc = ixDisc("initialize_space");
+  const daoId = args.daoId;
+  const salt32 = serArray32(args.salt);
+  const data = import_buffer2.Buffer.from(concatBytes2(disc, serPubkey(daoId), salt32));
+  const [spaceAcct] = deriveSpacePda(daoId);
+  return {
+    spaceAcct,
+    ix: new import_web35.TransactionInstruction({
+      programId,
+      keys: [
+        { pubkey: spaceAcct, isSigner: false, isWritable: true },
+        { pubkey: args.authority, isSigner: true, isWritable: false },
+        { pubkey: args.payer, isSigner: true, isWritable: true },
+        { pubkey: import_web35.SystemProgram.programId, isSigner: false, isWritable: false }
+      ],
+      data
+    })
+  };
+}
+function buildAttestIdentityIx(args) {
+  const programId = args.programId ?? PROGRAM_ID;
+  if (args.platform !== (args.platformSeed & 255)) {
+    throw new Error("platformSeed must match platform enum discriminant");
+  }
+  const disc = ixDisc("attest_identity");
+  const daoId = args.daoId;
+  const idHash32 = serArray32(args.idHash);
+  const data = import_buffer2.Buffer.from(
+    concatBytes2(
+      disc,
+      serPubkey(daoId),
+      serPlatform(args.platform),
+      serU8(args.platformSeed),
+      idHash32,
+      i64le(args.expiresAt)
+    )
+  );
+  const [spaceAcct] = deriveSpacePda(daoId);
+  const [identity] = deriveIdentityPda(spaceAcct, args.platformSeed, idHash32);
+  return {
+    spaceAcct,
+    identity,
+    ix: new import_web35.TransactionInstruction({
+      programId,
+      keys: [
+        { pubkey: spaceAcct, isSigner: false, isWritable: false },
+        { pubkey: args.attestor, isSigner: true, isWritable: false },
+        { pubkey: identity, isSigner: false, isWritable: true },
+        // init_if_needed
+        { pubkey: args.payer, isSigner: true, isWritable: true },
+        { pubkey: import_web35.SystemProgram.programId, isSigner: false, isWritable: false }
+      ],
+      data
+    })
+  };
+}
+function buildRevokeIdentityIx(args) {
+  const programId = args.programId ?? PROGRAM_ID;
+  if (args.platform !== (args.platformSeed & 255)) {
+    throw new Error("platformSeed must match platform enum discriminant");
+  }
+  const disc = ixDisc("revoke_identity");
+  const daoId = args.daoId;
+  const idHash32 = serArray32(args.idHash);
+  const data = import_buffer2.Buffer.from(
+    concatBytes2(
+      disc,
+      serPubkey(daoId),
+      serPlatform(args.platform),
+      serU8(args.platformSeed),
+      idHash32
+    )
+  );
+  const [spaceAcct] = deriveSpacePda(daoId);
+  const [identity] = deriveIdentityPda(spaceAcct, args.platformSeed, idHash32);
+  return {
+    spaceAcct,
+    identity,
+    ix: new import_web35.TransactionInstruction({
+      programId,
+      keys: [
+        { pubkey: spaceAcct, isSigner: false, isWritable: false },
+        { pubkey: args.attestor, isSigner: true, isWritable: false },
+        { pubkey: identity, isSigner: false, isWritable: true }
+      ],
+      data
+    })
+  };
+}
+function buildLinkWalletIx(args) {
+  const programId = args.programId ?? PROGRAM_ID;
+  const disc = ixDisc("link_wallet");
+  const daoId = args.daoId;
+  const walletHash32 = serArray32(args.walletHash);
+  const idHash32 = serArray32(args.idHash);
+  const data = import_buffer2.Buffer.from(concatBytes2(disc, serPubkey(daoId), walletHash32));
+  const [spaceAcct] = deriveSpacePda(daoId);
+  const [identity] = deriveIdentityPda(spaceAcct, args.platformSeed, idHash32);
+  const [link] = deriveLinkPda(identity, walletHash32);
+  return {
+    spaceAcct,
+    identity,
+    link,
+    ix: new import_web35.TransactionInstruction({
+      programId,
+      keys: [
+        { pubkey: spaceAcct, isSigner: false, isWritable: false },
+        { pubkey: args.attestor, isSigner: true, isWritable: false },
+        { pubkey: identity, isSigner: false, isWritable: false },
+        { pubkey: args.wallet, isSigner: false, isWritable: false },
+        // CHECK
+        { pubkey: link, isSigner: false, isWritable: true },
+        // init_if_needed
+        { pubkey: args.payer, isSigner: true, isWritable: true },
+        { pubkey: import_web35.SystemProgram.programId, isSigner: false, isWritable: false }
+      ],
+      data
+    })
+  };
+}
+function buildUnlinkWalletIx(args) {
+  const programId = args.programId ?? PROGRAM_ID;
+  const disc = ixDisc("unlink_wallet");
+  const daoId = args.daoId;
+  const idHash32 = serArray32(args.idHash);
+  const walletHash32 = serArray32(args.walletHash);
+  const data = import_buffer2.Buffer.from(concatBytes2(disc, serPubkey(daoId)));
+  const [spaceAcct] = deriveSpacePda(daoId);
+  const [identity] = deriveIdentityPda(spaceAcct, args.platformSeed, idHash32);
+  const [link] = deriveLinkPda(identity, walletHash32);
+  return {
+    spaceAcct,
+    identity,
+    link,
+    ix: new import_web35.TransactionInstruction({
+      programId,
+      keys: [
+        { pubkey: spaceAcct, isSigner: false, isWritable: false },
+        { pubkey: args.attestor, isSigner: true, isWritable: false },
+        { pubkey: identity, isSigner: false, isWritable: false },
+        { pubkey: link, isSigner: false, isWritable: true },
+        // close
+        { pubkey: args.recipient, isSigner: false, isWritable: true },
+        { pubkey: import_web35.SystemProgram.programId, isSigner: false, isWritable: false }
+      ],
+      data
+    })
+  };
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   PROGRAM_ID,
@@ -144,6 +345,11 @@ async function fetchLinksForIdentity(connection, identity) {
   TAG_TWITTER,
   TAG_WALLET,
   VerificationPlatform,
+  buildAttestIdentityIx,
+  buildInitializeSpaceIx,
+  buildLinkWalletIx,
+  buildRevokeIdentityIx,
+  buildUnlinkWalletIx,
   deriveIdentityPda,
   deriveLinkPda,
   deriveSpacePda,
