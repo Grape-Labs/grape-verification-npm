@@ -172,11 +172,17 @@ function buildAttestIdentityIx(args) {
   const data = Buffer2.from(
     concatBytes2(
       disc,
+      // 8 bytes
       serPubkey(daoId),
+      // 32 bytes - THIS WAS MISSING!
       serPlatform(args.platform),
+      // 1 byte
       serU8(args.platformSeed),
+      // 1 byte
       idHash32,
+      // 32 bytes
       i64le(args.expiresAt)
+      // 8 bytes
     )
   );
   const [spaceAcct] = deriveSpacePda(daoId);
@@ -190,7 +196,6 @@ function buildAttestIdentityIx(args) {
         { pubkey: spaceAcct, isSigner: false, isWritable: false },
         { pubkey: args.attestor, isSigner: true, isWritable: false },
         { pubkey: identity, isSigner: false, isWritable: true },
-        // init_if_needed
         { pubkey: args.payer, isSigner: true, isWritable: true },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
       ],
@@ -209,10 +214,15 @@ function buildRevokeIdentityIx(args) {
   const data = Buffer2.from(
     concatBytes2(
       disc,
+      // 8 bytes
       serPubkey(daoId),
+      // 32 bytes - THIS WAS MISSING!
       serPlatform(args.platform),
+      // 1 byte
       serU8(args.platformSeed),
+      // 1 byte
       idHash32
+      // 32 bytes
     )
   );
   const [spaceAcct] = deriveSpacePda(daoId);
@@ -237,7 +247,20 @@ function buildLinkWalletIx(args) {
   const daoId = args.daoId;
   const walletHash32 = serArray32(args.walletHash);
   const idHash32 = serArray32(args.idHash);
-  const data = Buffer2.from(concatBytes2(disc, serPubkey(daoId), walletHash32));
+  const data = Buffer2.from(
+    concatBytes2(
+      disc,
+      // 8 bytes
+      serPubkey(daoId),
+      // 32 bytes - THIS WAS MISSING!
+      serU8(args.platformSeed),
+      // 1 byte
+      idHash32,
+      // 32 bytes
+      walletHash32
+      // 32 bytes
+    )
+  );
   const [spaceAcct] = deriveSpacePda(daoId);
   const [identity] = deriveIdentityPda(spaceAcct, args.platformSeed, idHash32);
   const [link] = deriveLinkPda(identity, walletHash32);
@@ -252,9 +275,7 @@ function buildLinkWalletIx(args) {
         { pubkey: args.attestor, isSigner: true, isWritable: false },
         { pubkey: identity, isSigner: false, isWritable: false },
         { pubkey: args.wallet, isSigner: false, isWritable: false },
-        // CHECK
         { pubkey: link, isSigner: false, isWritable: true },
-        // init_if_needed
         { pubkey: args.payer, isSigner: true, isWritable: true },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
       ],
@@ -268,7 +289,20 @@ function buildUnlinkWalletIx(args) {
   const daoId = args.daoId;
   const idHash32 = serArray32(args.idHash);
   const walletHash32 = serArray32(args.walletHash);
-  const data = Buffer2.from(concatBytes2(disc, serPubkey(daoId)));
+  const data = Buffer2.from(
+    concatBytes2(
+      disc,
+      // 8 bytes
+      serPubkey(daoId),
+      // 32 bytes - THIS WAS MISSING!
+      serU8(args.platformSeed),
+      // 1 byte
+      idHash32,
+      // 32 bytes
+      walletHash32
+      // 32 bytes
+    )
+  );
   const [spaceAcct] = deriveSpacePda(daoId);
   const [identity] = deriveIdentityPda(spaceAcct, args.platformSeed, idHash32);
   const [link] = deriveLinkPda(identity, walletHash32);
@@ -283,7 +317,6 @@ function buildUnlinkWalletIx(args) {
         { pubkey: args.attestor, isSigner: true, isWritable: false },
         { pubkey: identity, isSigner: false, isWritable: false },
         { pubkey: link, isSigner: false, isWritable: true },
-        // close
         { pubkey: args.recipient, isSigner: false, isWritable: true },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
       ],
