@@ -1,7 +1,7 @@
 // src/constants.ts
 import { PublicKey } from "@solana/web3.js";
 var PROGRAM_ID = new PublicKey(
-  "Ev4pb62pHYcFHLmV89JRcgQtS39ndBia51X9ne9NmBkH"
+  "VrFyyRxPoyWxpABpBXU4YUCCF9p8giDSJUv2oXfDr5q"
 );
 var VerificationPlatform = /* @__PURE__ */ ((VerificationPlatform3) => {
   VerificationPlatform3[VerificationPlatform3["Discord"] = 0] = "Discord";

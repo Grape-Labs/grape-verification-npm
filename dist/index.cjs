@@ -46,7 +46,7 @@ module.exports = __toCommonJS(index_exports);
 // src/constants.ts
 var import_web3 = require("@solana/web3.js");
 var PROGRAM_ID = new import_web3.PublicKey(
-  "Ev4pb62pHYcFHLmV89JRcgQtS39ndBia51X9ne9NmBkH"
+  "VrFyyRxPoyWxpABpBXU4YUCCF9p8giDSJUv2oXfDr5q"
 );
 var VerificationPlatform = /* @__PURE__ */ ((VerificationPlatform3) => {
   VerificationPlatform3[VerificationPlatform3["Discord"] = 0] = "Discord";

@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 
 export const PROGRAM_ID = new PublicKey(
-  "Ev4pb62pHYcFHLmV89JRcgQtS39ndBia51X9ne9NmBkH"
+  "VrFyyRxPoyWxpABpBXU4YUCCF9p8giDSJUv2oXfDr5q"
 );
 
 // Platform enum must match on-chain discriminants
