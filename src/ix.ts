@@ -257,6 +257,56 @@ export function buildLinkWalletIx(args: {
   };
 }
 
+export function buildLinkWalletSelfIx(args: {
+  daoId: PublicKey;
+  platformSeed: number;
+  idHash: Uint8Array | number[];
+  wallet: PublicKey;              // must be signer on the tx
+  walletHash: Uint8Array | number[];
+  payer: PublicKey;
+  programId?: PublicKey;
+}) {
+  const programId = args.programId ?? PROGRAM_ID;
+
+  const disc = ixDisc("link_wallet_self");
+  const daoId = args.daoId;
+  const idHash32 = serArray32(args.idHash);
+  const walletHash32 = serArray32(args.walletHash);
+
+  // same layout as link_wallet: disc + dao_id + platform_seed + id_hash + wallet_hash
+  const data = Buffer.from(
+    concatBytes(
+      disc,
+      serPubkey(daoId),
+      serU8(args.platformSeed),
+      idHash32,
+      walletHash32
+    )
+  );
+
+  const [spaceAcct] = deriveSpacePda(daoId);
+  const [identity] = deriveIdentityPda(spaceAcct, args.platformSeed, idHash32);
+  const [link] = deriveLinkPda(identity, walletHash32);
+
+  return {
+    spaceAcct,
+    identity,
+    link,
+    ix: new TransactionInstruction({
+      programId,
+      keys: [
+        { pubkey: spaceAcct, isSigner: false, isWritable: false },
+        { pubkey: identity, isSigner: false, isWritable: false },
+        { pubkey: args.wallet, isSigner: true, isWritable: false },  // ✅ signer
+        { pubkey: link, isSigner: false, isWritable: true },
+        { pubkey: args.payer, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data,
+    }),
+  };
+}
+
 /* =============================================================================
  * buildUnlinkWalletIx - FIXED
  * ============================================================================= */
