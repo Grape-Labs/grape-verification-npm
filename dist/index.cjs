@@ -30,15 +30,19 @@ __export(index_exports, {
   buildAttestIdentityIx: () => buildAttestIdentityIx,
   buildInitializeSpaceIx: () => buildInitializeSpaceIx,
   buildLinkWalletIx: () => buildLinkWalletIx,
+  buildLinkWalletSelfIx: () => buildLinkWalletSelfIx,
   buildRevokeIdentityIx: () => buildRevokeIdentityIx,
   buildUnlinkWalletIx: () => buildUnlinkWalletIx,
   deriveIdentityPda: () => deriveIdentityPda,
   deriveLinkPda: () => deriveLinkPda,
   deriveSpacePda: () => deriveSpacePda,
   fetchIdentity: () => fetchIdentity,
+  fetchLink: () => fetchLink,
+  fetchLinkedWallets: () => fetchLinkedWallets,
   fetchLinksForIdentity: () => fetchLinksForIdentity,
   fetchSpace: () => fetchSpace,
   identityHash: () => identityHash,
+  parseLink: () => parseLink,
   walletHash: () => walletHash
 });
 module.exports = __toCommonJS(index_exports);
@@ -141,11 +145,91 @@ async function fetchLinksForIdentity(connection, identity) {
   });
 }
 
-// src/ix.ts
+// src/fetch.ts
 var import_web35 = require("@solana/web3.js");
-var import_buffer2 = require("buffer");
 var import_sha256 = require("@noble/hashes/sha256");
 var import_utils = require("@noble/hashes/utils");
+var import_buffer2 = require("buffer");
+function accountDiscriminator(name) {
+  return (0, import_sha256.sha256)((0, import_utils.utf8ToBytes)(`account:${name}`)).slice(0, 8);
+}
+var LINK_ACCOUNT_DISC = accountDiscriminator("GrapeVerificationLink");
+function parseLink(data) {
+  if (data.length < 88) {
+    throw new Error(`Link account data too short: ${data.length} bytes`);
+  }
+  const version = data[8];
+  const identity = new import_web35.PublicKey(data.slice(9, 41));
+  const walletHash2 = data.slice(41, 73);
+  const linkedAtBigInt = data.readBigInt64LE(73);
+  const bump = data[81];
+  return {
+    version,
+    identity,
+    walletHash: walletHash2,
+    linkedAt: Number(linkedAtBigInt),
+    bump
+  };
+}
+async function fetchLinkedWallets(connection, identityPda, currentWalletHash, programId = PROGRAM_ID) {
+  try {
+    const discBase64 = import_buffer2.Buffer.from(LINK_ACCOUNT_DISC).toString("base64");
+    const accounts = await connection.getProgramAccounts(programId, {
+      filters: [
+        {
+          memcmp: {
+            offset: 0,
+            bytes: discBase64,
+            encoding: "base64"
+          }
+        },
+        {
+          memcmp: {
+            offset: 9,
+            bytes: identityPda.toBase58()
+            // base58 is default for pubkeys
+          }
+        }
+      ]
+    });
+    const currentHex = currentWalletHash ? bytesToHex(currentWalletHash) : null;
+    const wallets = accounts.map((account) => {
+      const parsed = parseLink(account.account.data);
+      const whHex = bytesToHex(parsed.walletHash);
+      return {
+        pubkey: account.pubkey,
+        walletHashBytes: parsed.walletHash,
+        walletHashHex: whHex,
+        linkedAt: parsed.linkedAt,
+        identity: parsed.identity,
+        isCurrentWallet: currentHex !== null && whHex === currentHex
+      };
+    });
+    return wallets.sort((a, b) => a.linkedAt - b.linkedAt);
+  } catch (error) {
+    console.error("fetchLinkedWallets error:", error);
+    return [];
+  }
+}
+function bytesToHex(bytes) {
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function fetchLink(connection, linkPda) {
+  try {
+    const accountInfo = await connection.getAccountInfo(linkPda);
+    if (!accountInfo) return null;
+    return parseLink(accountInfo.data);
+  } catch (error) {
+    console.error("fetchLink error:", error);
+    return null;
+  }
+}
+
+// src/ix.ts
+var import_web36 = require("@solana/web3.js");
+var import_buffer3 = require("buffer");
+var import_sha2562 = require("@noble/hashes/sha256");
+var import_utils2 = require("@noble/hashes/utils");
 function u8(n) {
   return n & 255;
 }
@@ -169,7 +253,7 @@ function concatBytes2(...arrays) {
   return out;
 }
 function ixDisc(nameSnake) {
-  return (0, import_sha256.sha256)((0, import_utils.utf8ToBytes)(`global:${nameSnake}`)).slice(0, 8);
+  return (0, import_sha2562.sha256)((0, import_utils2.utf8ToBytes)(`global:${nameSnake}`)).slice(0, 8);
 }
 function serPubkey(pk) {
   return pk.toBytes();
@@ -190,17 +274,17 @@ function buildInitializeSpaceIx(args) {
   const disc = ixDisc("initialize_space");
   const daoId = args.daoId;
   const salt32 = serArray32(args.salt);
-  const data = import_buffer2.Buffer.from(concatBytes2(disc, serPubkey(daoId), salt32));
+  const data = import_buffer3.Buffer.from(concatBytes2(disc, serPubkey(daoId), salt32));
   const [spaceAcct] = deriveSpacePda(daoId);
   return {
     spaceAcct,
-    ix: new import_web35.TransactionInstruction({
+    ix: new import_web36.TransactionInstruction({
       programId,
       keys: [
         { pubkey: spaceAcct, isSigner: false, isWritable: true },
         { pubkey: args.authority, isSigner: true, isWritable: false },
         { pubkey: args.payer, isSigner: true, isWritable: true },
-        { pubkey: import_web35.SystemProgram.programId, isSigner: false, isWritable: false }
+        { pubkey: import_web36.SystemProgram.programId, isSigner: false, isWritable: false }
       ],
       data
     })
@@ -214,7 +298,7 @@ function buildAttestIdentityIx(args) {
   const disc = ixDisc("attest_identity");
   const daoId = args.daoId;
   const idHash32 = serArray32(args.idHash);
-  const data = import_buffer2.Buffer.from(
+  const data = import_buffer3.Buffer.from(
     concatBytes2(
       disc,
       // 8 bytes
@@ -235,14 +319,14 @@ function buildAttestIdentityIx(args) {
   return {
     spaceAcct,
     identity,
-    ix: new import_web35.TransactionInstruction({
+    ix: new import_web36.TransactionInstruction({
       programId,
       keys: [
         { pubkey: spaceAcct, isSigner: false, isWritable: false },
         { pubkey: args.attestor, isSigner: true, isWritable: false },
         { pubkey: identity, isSigner: false, isWritable: true },
         { pubkey: args.payer, isSigner: true, isWritable: true },
-        { pubkey: import_web35.SystemProgram.programId, isSigner: false, isWritable: false }
+        { pubkey: import_web36.SystemProgram.programId, isSigner: false, isWritable: false }
       ],
       data
     })
@@ -256,7 +340,7 @@ function buildRevokeIdentityIx(args) {
   const disc = ixDisc("revoke_identity");
   const daoId = args.daoId;
   const idHash32 = serArray32(args.idHash);
-  const data = import_buffer2.Buffer.from(
+  const data = import_buffer3.Buffer.from(
     concatBytes2(
       disc,
       // 8 bytes
@@ -275,7 +359,7 @@ function buildRevokeIdentityIx(args) {
   return {
     spaceAcct,
     identity,
-    ix: new import_web35.TransactionInstruction({
+    ix: new import_web36.TransactionInstruction({
       programId,
       keys: [
         { pubkey: spaceAcct, isSigner: false, isWritable: false },
@@ -292,7 +376,7 @@ function buildLinkWalletIx(args) {
   const daoId = args.daoId;
   const walletHash32 = serArray32(args.walletHash);
   const idHash32 = serArray32(args.idHash);
-  const data = import_buffer2.Buffer.from(
+  const data = import_buffer3.Buffer.from(
     concatBytes2(
       disc,
       // 8 bytes
@@ -313,7 +397,7 @@ function buildLinkWalletIx(args) {
     spaceAcct,
     identity,
     link,
-    ix: new import_web35.TransactionInstruction({
+    ix: new import_web36.TransactionInstruction({
       programId,
       keys: [
         { pubkey: spaceAcct, isSigner: false, isWritable: false },
@@ -322,7 +406,44 @@ function buildLinkWalletIx(args) {
         { pubkey: args.wallet, isSigner: false, isWritable: false },
         { pubkey: link, isSigner: false, isWritable: true },
         { pubkey: args.payer, isSigner: true, isWritable: true },
-        { pubkey: import_web35.SystemProgram.programId, isSigner: false, isWritable: false }
+        { pubkey: import_web36.SystemProgram.programId, isSigner: false, isWritable: false }
+      ],
+      data
+    })
+  };
+}
+function buildLinkWalletSelfIx(args) {
+  const programId = args.programId ?? PROGRAM_ID;
+  const disc = ixDisc("link_wallet_self");
+  const daoId = args.daoId;
+  const idHash32 = serArray32(args.idHash);
+  const walletHash32 = serArray32(args.walletHash);
+  const data = import_buffer3.Buffer.from(
+    concatBytes2(
+      disc,
+      serPubkey(daoId),
+      serU8(args.platformSeed),
+      idHash32,
+      walletHash32
+    )
+  );
+  const [spaceAcct] = deriveSpacePda(daoId);
+  const [identity] = deriveIdentityPda(spaceAcct, args.platformSeed, idHash32);
+  const [link] = deriveLinkPda(identity, walletHash32);
+  return {
+    spaceAcct,
+    identity,
+    link,
+    ix: new import_web36.TransactionInstruction({
+      programId,
+      keys: [
+        { pubkey: spaceAcct, isSigner: false, isWritable: false },
+        { pubkey: identity, isSigner: false, isWritable: false },
+        { pubkey: args.wallet, isSigner: true, isWritable: false },
+        // ✅ signer
+        { pubkey: link, isSigner: false, isWritable: true },
+        { pubkey: args.payer, isSigner: true, isWritable: true },
+        { pubkey: import_web36.SystemProgram.programId, isSigner: false, isWritable: false }
       ],
       data
     })
@@ -334,7 +455,7 @@ function buildUnlinkWalletIx(args) {
   const daoId = args.daoId;
   const idHash32 = serArray32(args.idHash);
   const walletHash32 = serArray32(args.walletHash);
-  const data = import_buffer2.Buffer.from(
+  const data = import_buffer3.Buffer.from(
     concatBytes2(
       disc,
       // 8 bytes
@@ -355,7 +476,7 @@ function buildUnlinkWalletIx(args) {
     spaceAcct,
     identity,
     link,
-    ix: new import_web35.TransactionInstruction({
+    ix: new import_web36.TransactionInstruction({
       programId,
       keys: [
         { pubkey: spaceAcct, isSigner: false, isWritable: false },
@@ -363,7 +484,7 @@ function buildUnlinkWalletIx(args) {
         { pubkey: identity, isSigner: false, isWritable: false },
         { pubkey: link, isSigner: false, isWritable: true },
         { pubkey: args.recipient, isSigner: false, isWritable: true },
-        { pubkey: import_web35.SystemProgram.programId, isSigner: false, isWritable: false }
+        { pubkey: import_web36.SystemProgram.programId, isSigner: false, isWritable: false }
       ],
       data
     })
@@ -381,14 +502,18 @@ function buildUnlinkWalletIx(args) {
   buildAttestIdentityIx,
   buildInitializeSpaceIx,
   buildLinkWalletIx,
+  buildLinkWalletSelfIx,
   buildRevokeIdentityIx,
   buildUnlinkWalletIx,
   deriveIdentityPda,
   deriveLinkPda,
   deriveSpacePda,
   fetchIdentity,
+  fetchLink,
+  fetchLinkedWallets,
   fetchLinksForIdentity,
   fetchSpace,
   identityHash,
+  parseLink,
   walletHash
 });

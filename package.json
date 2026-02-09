@@ -1,6 +1,6 @@
 {
   "name": "@grapenpm/grape-verification-registry",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "description": "Client helpers for the Grape Verification Registry Solana program",
   "license": "MIT",
   "type": "module",
