@@ -3,6 +3,7 @@ import { PublicKey } from "@solana/web3.js";
 var PROGRAM_ID = new PublicKey(
   "VrFyyRxPoyWxpABpBXU4YUCCF9p8giDSJUv2oXfDr5q"
 );
+var COMMUNITY_METADATA_MAX_LEN = 256;
 var VerificationPlatform = /* @__PURE__ */ ((VerificationPlatform3) => {
   VerificationPlatform3[VerificationPlatform3["Discord"] = 0] = "Discord";
   VerificationPlatform3[VerificationPlatform3["Telegram"] = 1] = "Telegram";
@@ -79,6 +80,12 @@ function deriveLinkPda(identity, walletHash2) {
     PROGRAM_ID
   );
 }
+function deriveSpaceMetadataPda(space) {
+  return PublicKey3.findProgramAddressSync(
+    [Buffer.from("space_meta"), space.toBytes()],
+    PROGRAM_ID
+  );
+}
 
 // src/read.ts
 import "@solana/web3.js";
@@ -87,6 +94,14 @@ async function fetchSpace(connection, space) {
 }
 async function fetchIdentity(connection, identity) {
   return connection.getAccountInfo(identity);
+}
+async function fetchSpaceMetadata(connection, spaceMetadata) {
+  return connection.getAccountInfo(spaceMetadata);
+}
+async function fetchSpaceMetadataByDaoId(connection, daoId) {
+  const [space] = deriveSpacePda(daoId);
+  const [spaceMetadata] = deriveSpaceMetadataPda(space);
+  return connection.getAccountInfo(spaceMetadata);
 }
 async function fetchLinksForIdentity(connection, identity) {
   return connection.getProgramAccounts(PROGRAM_ID, {
@@ -212,6 +227,17 @@ function serPubkey(pk) {
 function serU8(n) {
   return new Uint8Array([u8(n)]);
 }
+function u32le(n) {
+  if (!Number.isInteger(n) || n < 0 || n > 4294967295) {
+    throw new Error("Expected u32 integer");
+  }
+  const out = new Uint8Array(4);
+  out[0] = n & 255;
+  out[1] = n >>> 8 & 255;
+  out[2] = n >>> 16 & 255;
+  out[3] = n >>> 24 & 255;
+  return out;
+}
 function serArray32(a) {
   const b = a instanceof Uint8Array ? a : Uint8Array.from(a);
   if (b.length !== 32) throw new Error("Expected 32-byte array");
@@ -219,6 +245,16 @@ function serArray32(a) {
 }
 function serPlatform(platform) {
   return serU8(platform);
+}
+function serOptionString(value) {
+  if (value == null) return serU8(0);
+  const bytes = utf8ToBytes2(value);
+  if (bytes.length > COMMUNITY_METADATA_MAX_LEN) {
+    throw new Error(
+      `communityMetadata exceeds ${COMMUNITY_METADATA_MAX_LEN} bytes`
+    );
+  }
+  return concatBytes2(serU8(1), u32le(bytes.length), bytes);
 }
 function buildInitializeSpaceIx(args) {
   const programId = args.programId ?? PROGRAM_ID;
@@ -240,6 +276,41 @@ function buildInitializeSpaceIx(args) {
       data
     })
   };
+}
+function buildSetSpaceCommunityMetadataIx(args) {
+  const programId = args.programId ?? PROGRAM_ID;
+  const disc = ixDisc("set_space_community_metadata");
+  const daoId = args.daoId;
+  const encodedMetadata = serOptionString(args.communityMetadata);
+  const data = Buffer3.from(
+    concatBytes2(disc, serPubkey(daoId), encodedMetadata)
+  );
+  const [spaceAcct] = deriveSpacePda(daoId);
+  const [spaceMetadata] = deriveSpaceMetadataPda(spaceAcct);
+  return {
+    spaceAcct,
+    spaceMetadata,
+    ix: new TransactionInstruction({
+      programId,
+      keys: [
+        { pubkey: spaceAcct, isSigner: false, isWritable: false },
+        { pubkey: args.authority, isSigner: true, isWritable: false },
+        { pubkey: spaceMetadata, isSigner: false, isWritable: true },
+        { pubkey: args.payer, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+      ],
+      data
+    })
+  };
+}
+function buildClearSpaceCommunityMetadataIx(args) {
+  return buildSetSpaceCommunityMetadataIx({
+    daoId: args.daoId,
+    authority: args.authority,
+    payer: args.payer,
+    communityMetadata: null,
+    programId: args.programId ?? PROGRAM_ID
+  });
 }
 function buildAttestIdentityIx(args) {
   const programId = args.programId ?? PROGRAM_ID;
@@ -442,6 +513,7 @@ function buildUnlinkWalletIx(args) {
   };
 }
 export {
+  COMMUNITY_METADATA_MAX_LEN,
   PROGRAM_ID,
   TAG_DISCORD,
   TAG_EMAIL,
@@ -450,19 +522,24 @@ export {
   TAG_WALLET,
   VerificationPlatform,
   buildAttestIdentityIx,
+  buildClearSpaceCommunityMetadataIx,
   buildInitializeSpaceIx,
   buildLinkWalletIx,
   buildLinkWalletSelfIx,
   buildRevokeIdentityIx,
+  buildSetSpaceCommunityMetadataIx,
   buildUnlinkWalletIx,
   deriveIdentityPda,
   deriveLinkPda,
+  deriveSpaceMetadataPda,
   deriveSpacePda,
   fetchIdentity,
   fetchLink,
   fetchLinkedWallets,
   fetchLinksForIdentity,
   fetchSpace,
+  fetchSpaceMetadata,
+  fetchSpaceMetadataByDaoId,
   identityHash,
   parseLink,
   walletHash

@@ -4,8 +4,17 @@ import { Buffer } from "buffer";
 import { sha256 } from "@noble/hashes/sha256";
 import { utf8ToBytes } from "@noble/hashes/utils";
 
-import { PROGRAM_ID, VerificationPlatform } from "./constants.js";
-import { deriveSpacePda, deriveIdentityPda, deriveLinkPda } from "./pda.js";
+import {
+  COMMUNITY_METADATA_MAX_LEN,
+  PROGRAM_ID,
+  VerificationPlatform,
+} from "./constants.js";
+import {
+  deriveIdentityPda,
+  deriveLinkPda,
+  deriveSpaceMetadataPda,
+  deriveSpacePda,
+} from "./pda.js";
 
 /* ---------------- helpers ---------------- */
 
@@ -47,6 +56,19 @@ function serU8(n: number) {
   return new Uint8Array([u8(n)]);
 }
 
+function u32le(n: number) {
+  if (!Number.isInteger(n) || n < 0 || n > 0xffffffff) {
+    throw new Error("Expected u32 integer");
+  }
+
+  const out = new Uint8Array(4);
+  out[0] = n & 0xff;
+  out[1] = (n >>> 8) & 0xff;
+  out[2] = (n >>> 16) & 0xff;
+  out[3] = (n >>> 24) & 0xff;
+  return out;
+}
+
 function serArray32(a: Uint8Array | number[]) {
   const b = a instanceof Uint8Array ? a : Uint8Array.from(a);
   if (b.length !== 32) throw new Error("Expected 32-byte array");
@@ -55,6 +77,19 @@ function serArray32(a: Uint8Array | number[]) {
 
 function serPlatform(platform: VerificationPlatform): Uint8Array {
   return serU8(platform as number);
+}
+
+function serOptionString(value: string | null | undefined): Uint8Array {
+  if (value == null) return serU8(0);
+
+  const bytes = utf8ToBytes(value);
+  if (bytes.length > COMMUNITY_METADATA_MAX_LEN) {
+    throw new Error(
+      `communityMetadata exceeds ${COMMUNITY_METADATA_MAX_LEN} bytes`
+    );
+  }
+
+  return concatBytes(serU8(1), u32le(bytes.length), bytes);
 }
 
 /* =============================================================================
@@ -92,6 +127,62 @@ export function buildInitializeSpaceIx(args: {
       data,
     }),
   };
+}
+
+/* =============================================================================
+ * buildSetSpaceCommunityMetadataIx
+ * ============================================================================= */
+
+export function buildSetSpaceCommunityMetadataIx(args: {
+  daoId: PublicKey;
+  authority: PublicKey;
+  payer: PublicKey;
+  communityMetadata: string | null;
+  programId?: PublicKey;
+}) {
+  const programId = args.programId ?? PROGRAM_ID;
+
+  const disc = ixDisc("set_space_community_metadata");
+  const daoId = args.daoId;
+  const encodedMetadata = serOptionString(args.communityMetadata);
+
+  const data = Buffer.from(
+    concatBytes(disc, serPubkey(daoId), encodedMetadata)
+  );
+
+  const [spaceAcct] = deriveSpacePda(daoId);
+  const [spaceMetadata] = deriveSpaceMetadataPda(spaceAcct);
+
+  return {
+    spaceAcct,
+    spaceMetadata,
+    ix: new TransactionInstruction({
+      programId,
+      keys: [
+        { pubkey: spaceAcct, isSigner: false, isWritable: false },
+        { pubkey: args.authority, isSigner: true, isWritable: false },
+        { pubkey: spaceMetadata, isSigner: false, isWritable: true },
+        { pubkey: args.payer, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data,
+    }),
+  };
+}
+
+export function buildClearSpaceCommunityMetadataIx(args: {
+  daoId: PublicKey;
+  authority: PublicKey;
+  payer: PublicKey;
+  programId?: PublicKey;
+}) {
+  return buildSetSpaceCommunityMetadataIx({
+    daoId: args.daoId,
+    authority: args.authority,
+    payer: args.payer,
+    communityMetadata: null,
+    programId: args.programId ?? PROGRAM_ID,
+  });
 }
 
 /* =============================================================================

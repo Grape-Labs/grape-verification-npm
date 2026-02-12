@@ -50,3 +50,14 @@ export function deriveLinkPda(
     PROGRAM_ID
   );
 }
+
+/**
+ * Space metadata PDA
+ * seeds = ["space_meta", space]
+ */
+export function deriveSpaceMetadataPda(space: PublicKey) {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("space_meta"), space.toBytes()],
+    PROGRAM_ID
+  );
+}

@@ -4,6 +4,7 @@ import * as buffer from 'buffer';
 import { Buffer } from 'buffer';
 
 declare const PROGRAM_ID: PublicKey;
+declare const COMMUNITY_METADATA_MAX_LEN = 256;
 declare enum VerificationPlatform {
     Discord = 0,
     Telegram = 1,
@@ -40,9 +41,16 @@ declare function deriveIdentityPda(space: PublicKey, platformSeed: number, idHas
  * seeds = ["link", identity, wallet_hash]
  */
 declare function deriveLinkPda(identity: PublicKey, walletHash: Uint8Array): [PublicKey, number];
+/**
+ * Space metadata PDA
+ * seeds = ["space_meta", space]
+ */
+declare function deriveSpaceMetadataPda(space: PublicKey): [PublicKey, number];
 
 declare function fetchSpace(connection: Connection, space: PublicKey): Promise<_solana_web3_js.AccountInfo<buffer.Buffer> | null>;
 declare function fetchIdentity(connection: Connection, identity: PublicKey): Promise<_solana_web3_js.AccountInfo<buffer.Buffer> | null>;
+declare function fetchSpaceMetadata(connection: Connection, spaceMetadata: PublicKey): Promise<_solana_web3_js.AccountInfo<buffer.Buffer> | null>;
+declare function fetchSpaceMetadataByDaoId(connection: Connection, daoId: PublicKey): Promise<_solana_web3_js.AccountInfo<buffer.Buffer> | null>;
 declare function fetchLinksForIdentity(connection: Connection, identity: PublicKey): Promise<_solana_web3_js.GetProgramAccountsResponse>;
 
 /**
@@ -105,6 +113,27 @@ declare function buildInitializeSpaceIx(args: {
     programId?: PublicKey;
 }): {
     spaceAcct: PublicKey;
+    ix: TransactionInstruction;
+};
+declare function buildSetSpaceCommunityMetadataIx(args: {
+    daoId: PublicKey;
+    authority: PublicKey;
+    payer: PublicKey;
+    communityMetadata: string | null;
+    programId?: PublicKey;
+}): {
+    spaceAcct: PublicKey;
+    spaceMetadata: PublicKey;
+    ix: TransactionInstruction;
+};
+declare function buildClearSpaceCommunityMetadataIx(args: {
+    daoId: PublicKey;
+    authority: PublicKey;
+    payer: PublicKey;
+    programId?: PublicKey;
+}): {
+    spaceAcct: PublicKey;
+    spaceMetadata: PublicKey;
     ix: TransactionInstruction;
 };
 declare function buildAttestIdentityIx(args: {
@@ -177,4 +206,4 @@ declare function buildUnlinkWalletIx(args: {
     ix: TransactionInstruction;
 };
 
-export { type LinkedWallet, PROGRAM_ID, type ParsedLink, TAG_DISCORD, TAG_EMAIL, TAG_TELEGRAM, TAG_TWITTER, TAG_WALLET, VerificationPlatform, buildAttestIdentityIx, buildInitializeSpaceIx, buildLinkWalletIx, buildLinkWalletSelfIx, buildRevokeIdentityIx, buildUnlinkWalletIx, deriveIdentityPda, deriveLinkPda, deriveSpacePda, fetchIdentity, fetchLink, fetchLinkedWallets, fetchLinksForIdentity, fetchSpace, identityHash, parseLink, walletHash };
+export { COMMUNITY_METADATA_MAX_LEN, type LinkedWallet, PROGRAM_ID, type ParsedLink, TAG_DISCORD, TAG_EMAIL, TAG_TELEGRAM, TAG_TWITTER, TAG_WALLET, VerificationPlatform, buildAttestIdentityIx, buildClearSpaceCommunityMetadataIx, buildInitializeSpaceIx, buildLinkWalletIx, buildLinkWalletSelfIx, buildRevokeIdentityIx, buildSetSpaceCommunityMetadataIx, buildUnlinkWalletIx, deriveIdentityPda, deriveLinkPda, deriveSpaceMetadataPda, deriveSpacePda, fetchIdentity, fetchLink, fetchLinkedWallets, fetchLinksForIdentity, fetchSpace, fetchSpaceMetadata, fetchSpaceMetadataByDaoId, identityHash, parseLink, walletHash };

@@ -1,5 +1,6 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { PROGRAM_ID } from "./constants.js";
+import { deriveSpaceMetadataPda, deriveSpacePda } from "./pda.js";
 
 export async function fetchSpace(
   connection: Connection,
@@ -13,6 +14,22 @@ export async function fetchIdentity(
   identity: PublicKey
 ) {
   return connection.getAccountInfo(identity);
+}
+
+export async function fetchSpaceMetadata(
+  connection: Connection,
+  spaceMetadata: PublicKey
+) {
+  return connection.getAccountInfo(spaceMetadata);
+}
+
+export async function fetchSpaceMetadataByDaoId(
+  connection: Connection,
+  daoId: PublicKey
+) {
+  const [space] = deriveSpacePda(daoId);
+  const [spaceMetadata] = deriveSpaceMetadataPda(space);
+  return connection.getAccountInfo(spaceMetadata);
 }
 
 export async function fetchLinksForIdentity(

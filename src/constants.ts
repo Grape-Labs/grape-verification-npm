@@ -4,6 +4,8 @@ export const PROGRAM_ID = new PublicKey(
   "VrFyyRxPoyWxpABpBXU4YUCCF9p8giDSJUv2oXfDr5q"
 );
 
+export const COMMUNITY_METADATA_MAX_LEN = 256;
+
 // Platform enum must match on-chain discriminants
 export enum VerificationPlatform {
   Discord = 0,
